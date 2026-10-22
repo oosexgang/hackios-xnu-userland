@@ -74,7 +74,7 @@
 #   CHECK=1          check every image (every container) as it is made: apfsck has to find it clean and
 #                    the kernel's apfs_lib has to read every volume back as the directory it was made of
 #                    (../tools/apfs/check-image.sh; the system image takes a few minutes more)
-set -e
+set -eo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 source ../xnu-env.sh
 
@@ -361,8 +361,8 @@ if [ -d $IOS/rootfs/usr/lib ]; then
 			[ -f $M/libredwoodair.dylib ] && cp $M/libredwoodair.dylib obj/
 		fi
 	fi
-	# (drawable_test is built in the same block as surf_test, so it is copied with it)
-	cp obj/hello_dyn obj/svc_test obj/surf_test obj/drawable_test obj/rwtouch obj/mg_test root/bin/
+	cp obj/hello_dyn obj/svc_test obj/surf_test obj/rwtouch obj/mg_test root/bin/
+	[ -f obj/drawable_test ] && cp obj/drawable_test root/bin/  # older prebuilts do not include this diagnostic
 	[ -f obj/cpu_test ] && cp obj/cpu_test root/bin/        # (a prebuilt/ from before this program has none)
 	[ -f obj/cow_test ] && cp obj/cow_test root/bin/
 	[ -f obj/cg_test ] && cp obj/cg_test root/bin/
@@ -491,7 +491,7 @@ if [ -d $IOS/rootfs/usr/lib ]; then
 	cp $IOS/var.skel root/etc/var.skel              # the directories init creates in /private/var
 	# time zones: the template's links go in a circle until the time zone daemon has run (/usr/share/zoneinfo
 	# points back into /var); point them at the data that ships with the system, and use this machine's zone
-	zone=$(timedatectl show -p Timezone --value 2>/dev/null); zone=${zone:-UTC}
+	zone=$(timedatectl show -p Timezone --value 2>/dev/null || true); zone=${zone:-UTC}
 	sed -i -e 's|^l\t/usr/share/zoneinfo\t/private/var/db/timezone/zoneinfo$|l\t/usr/share/zoneinfo.default\t/private/var/db/timezone/zoneinfo|' \
 		-e "s|^l\t/var/db/timezone/zoneinfo/[^\t]*\t/private/var/db/timezone/localtime\$|l\t/var/db/timezone/zoneinfo/$zone\t/private/var/db/timezone/localtime|" root/etc/var.skel
 	# ... and the files of ours it puts there (var/): those under mobile/ belong to the user mobile
