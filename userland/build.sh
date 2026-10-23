@@ -364,7 +364,8 @@ if [ -d $IOS/rootfs/usr/lib ]; then
 		fi
 	fi
 	# (drawable_test is built in the same block as surf_test, so it is copied with it)
-	cp obj/hello_dyn obj/svc_test obj/surf_test obj/drawable_test obj/rwtouch obj/mg_test root/bin/
+	cp obj/hello_dyn obj/svc_test obj/surf_test obj/rwtouch obj/mg_test root/bin/
+	[ -f obj/drawable_test ] && cp obj/drawable_test root/bin/
 	[ -f obj/cpu_test ] && cp obj/cpu_test root/bin/        # (a prebuilt/ from before this program has none)
 	[ -f obj/thermald ] && cp obj/thermald root/bin/
 	[ -f obj/cow_test ] && cp obj/cow_test root/bin/
