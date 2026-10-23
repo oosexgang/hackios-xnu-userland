@@ -364,7 +364,10 @@ if [ -d $IOS/rootfs/usr/lib ]; then
 		fi
 	fi
 	# (drawable_test is built in the same block as surf_test, so it is copied with it)
-	cp obj/hello_dyn obj/svc_test obj/surf_test obj/drawable_test obj/rwtouch obj/mg_test root/bin/
+	# macOS/uptree note: drawable_test is absent from prebuilt/userland, guard it like
+	# the tests below (it is a GPU-surface check, not needed for a CPU-rendered image)
+	cp obj/hello_dyn obj/svc_test obj/surf_test obj/rwtouch obj/mg_test root/bin/
+	[ -f obj/drawable_test ] && cp obj/drawable_test root/bin/
 	[ -f obj/cpu_test ] && cp obj/cpu_test root/bin/        # (a prebuilt/ from before this program has none)
 	[ -f obj/thermald ] && cp obj/thermald root/bin/
 	[ -f obj/cow_test ] && cp obj/cow_test root/bin/
@@ -494,9 +497,20 @@ if [ -d $IOS/rootfs/usr/lib ]; then
 	cp $IOS/var.skel root/etc/var.skel              # the directories init creates in /private/var
 	# time zones: the template's links go in a circle until the time zone daemon has run (/usr/share/zoneinfo
 	# points back into /var); point them at the data that ships with the system, and use this machine's zone
-	zone=$(timedatectl show -p Timezone --value 2>/dev/null); zone=${zone:-UTC}
-	sed -i -e 's|^l\t/usr/share/zoneinfo\t/private/var/db/timezone/zoneinfo$|l\t/usr/share/zoneinfo.default\t/private/var/db/timezone/zoneinfo|' \
-		-e "s|^l\t/var/db/timezone/zoneinfo/[^\t]*\t/private/var/db/timezone/localtime\$|l\t/var/db/timezone/zoneinfo/$zone\t/private/var/db/timezone/localtime|" root/etc/var.skel
+	zone=$(timedatectl show -p Timezone --value 2>/dev/null || true)
+	[ -n "$zone" ] || zone=$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')
+	zone=${zone:-UTC}
+	# portable rewrite of two GNU-sed rules (BSD sed cannot parse 	 patterns or `sed -i -e`)
+	python3 - "$zone" root/etc/var.skel <<'PYEOF'
+import re, sys
+zone, p = sys.argv[1], sys.argv[2]
+s = open(p, encoding='utf-8').read()
+s = s.replace('l	/usr/share/zoneinfo	/private/var/db/timezone/zoneinfo',
+              'l	/usr/share/zoneinfo.default	/private/var/db/timezone/zoneinfo')
+s = re.sub(r'l	/var/db/timezone/zoneinfo/[^	]*	/private/var/db/timezone/localtime',
+           'l	/var/db/timezone/zoneinfo/' + zone + '	/private/var/db/timezone/localtime', s)
+open(p, 'w', encoding='utf-8').write(s)
+PYEOF
 	# ... and the files of ours it puts there (var/): those under mobile/ belong to the user mobile
 	cp -r var root/var
 	(cd var && find . -type f | sed 's|^\./||' | sort) | while read -r f; do
@@ -707,7 +721,7 @@ if [ -n "$FLASHBOOT" ] && [ -f $CACHE/dyld_shared_cache_arm64 ]; then
 		rm -f flashboot.os.apfs
 	fi
 	rm -rf flashboot flashboot.os flashboot.boot.apfs
-	echo "flashboot.apfs: $(( $(stat -c %s flashboot.apfs) / 1048576 )) MB"
+	echo "flashboot.apfs: $(( $(stat -c %s flashboot.apfs 2>/dev/null || stat -f %z flashboot.apfs) / 1048576 )) MB"
 fi
 
 # --- the system image -----------------------------------------------------------------------------
